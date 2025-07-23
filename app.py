@@ -59,7 +59,7 @@ elif selected_sample:
 st.markdown("---")
 
 # API 키와 데이터 프레임이 모두 준비되었을 때만 주 기능 활성화
-if client and df is not None:
+if client and df is not None: # 이 if 문 내부의 들여쓰기가 중요합니다.
     st.subheader("📊 업로드된 데이터 미리보기")
     st.write(df.head())
     st.write(f"데이터 크기: {df.shape[0]} 행, {df.shape[1]} 열")
@@ -103,11 +103,85 @@ if client and df is not None:
     user_question = st.text_area("업로드된 데이터에 대해 궁금한 점을 질문해주세요:",
                                  placeholder="예: '이 데이터셋에서 해빙 면적의 연간 평균 변화 추세는 어떻게 되나요?', '가장 큰 변화를 보인 기간은 언제인가요?', '이러한 환경 변화가 생태계에 미칠 잠재적 영향은 무엇인가요?'")
 
-    if st.button("답변 생성"):
+    if st.button("답변 생성"): # 이 if 문 내부의 들여쓰기가 중요합니다.
         if user_question:
             with st.spinner("GPT-4o가 데이터를 분석 중입니다..."):
-                try:
+                try: # 이 try 블록의 들여쓰기와, 그 안에 있는 코드의 들여쓰기가 중요합니다.
                     data_head = df.head().to_markdown(index=False)
                     data_description = df.describe().to_markdown()
                     
-                    buffer = io.StringIO()
+                    # 에러가 발생했던 라인: buffer = io.StringIO()
+                    # 이 라인이 try 블록 내부에 올바르게 들여쓰기 되어있는지 확인해주세요.
+                    buffer = io.StringIO() 
+                    df.info(buf=buffer, verbose=True, show_counts=True)
+                    column_info_str = buffer.getvalue()
+
+                    time_range = ""
+                    if date_col_found and 'Date' in df.columns:
+                        time_range = f"데이터 기간: {df['Date'].min().strftime('%Y-%m-%d')} ~ {df['Date'].max().strftime('%Y-%m-%d')}"
+                    
+                    prompt = f"""
+                    당신은 기후 변화 및 환경 데이터 분석 전문가입니다. 주어진 환경 데이터에 대한 사용자의 질문에 답하고,
+                    필요하다면 시각화를 위한 제안과 환경 변화에 대응하기 위한 의사 결정 또는 정책적 인사이트를 제공해주세요.
+                    제공된 데이터는 CSV 파일에서 로드되었으며, 그 구조와 요약은 다음과 같습니다:
+
+                    ---
+                    데이터 요약 (첫 5행):
+                    {data_head}
+
+                    ---
+                    데이터 통계 요약:
+                    {data_description}
+
+                    ---
+                    컬럼 정보 (데이터 타입 및 Non-null 개수):
+                    {column_info_str}
+
+                    ---
+                    {time_range}
+
+                    ---
+                    사용자의 질문: "{user_question}"
+
+                    답변은 다음 형식으로 구성해주세요:
+                    1. **환경 데이터 분석 결과:** 질문에 대한 직접적인 데이터 기반 답변 (예: 특정 기간 동안의 해빙 면적 감소율, 주요 추세).
+                    2. **시각화 제안 (선택 사항):** 답변을 뒷받침하거나 더 깊이 이해하기 위한 시각화 아이디어 (예: '연간 해빙 면적 변화를 보여주는 꺾은선 그래프와 추세선', '월별 해빙 면적의 계절성 패턴').
+                    3. **의사 결정 및 정책 인사이트:** 분석 결과를 바탕으로 기후 변화 대응, 환경 보호, 연구 방향 설정 등에 대해 사용자가 고려할 수 있는 구체적인 제안이나 통찰.
+                    """
+
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {"role": "system", "content": "You are a helpful climate and environmental data analysis expert."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.7
+                    )
+                    
+                    gpt_response = response.choices[0].message.content
+                    st.subheader("✨ GPT-4o의 분석 결과 및 의사 결정 지원")
+                    st.markdown(gpt_response)
+
+                    st.markdown("---")
+                    st.subheader("📈 주요 시각화 (GPT 제안 기반)")
+                    
+                    numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+                    
+                    if date_col_found and 'Date' in df.columns and len(numeric_cols) > 0:
+                        st.write("시간 경과에 따른 주요 수치 데이터 변화 추이:")
+                        
+                        plot_col = None
+                        for col in ['Extent', 'Area', 'CO2', 'Anomaly', 'Temperature']:
+                            if col in numeric_cols:
+                                plot_col = col
+                                break
+                        
+                        if plot_col is None:
+                            plot_col = numeric_cols[0] 
+
+                        if plot_col:
+                            fig, ax = plt.subplots(figsize=(12, 6))
+                            
+                            sns.lineplot(x='Date', y=plot_col, data=df, ax=ax, label=f'{plot_col} 값')
+                            
+                            sns.regplot(x=df['Date'].apply(lambda date: date
