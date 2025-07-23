@@ -184,4 +184,4 @@ if client and df is not None: # 이 if 문 내부의 들여쓰기가 중요합�
                             
                             sns.lineplot(x='Date', y=plot_col, data=df, ax=ax, label=f'{plot_col} 값')
                             
-                            sns.regplot(x=df['Date'].apply(lambda date: date
+                            sns.regplot(x=df['Date'].apply(lambda date: date)
